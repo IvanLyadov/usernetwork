@@ -1,5 +1,6 @@
 package com.example.userapi.service;
 
+import com.example.userapi.config.VaultConfig;
 import com.example.userapi.model.User;
 import com.example.userapi.repository.UserRepository;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -14,7 +15,14 @@ public class UserService {
     @Autowired
     private UserRepository userRepository;
 
+    @Autowired
+    private VaultConfig vaultConfig;
+
     public List<User> getAllUsers() {
+        // For debugging purposes, print the Clickhouse credentials
+        System.out.println("Clickhouse Username: " + vaultConfig.getUsername());
+        System.out.println("Clickhouse Password: " + vaultConfig.getPassword());
+
         return userRepository.findAll();
     }
 
