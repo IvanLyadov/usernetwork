@@ -38,5 +38,14 @@ Verify the stored data:
 vault kv get secret/demoapi
 ```
 
-### Open in browser to verify:
+### Open in browser to verify: 
 ```http://localhost:8080/api/users```
+
+## Using Docker
+### Build the Docker image:
+
+Run the following command in the root of your project directory (where the Dockerfile is located):
+```docker build -t user-api```
+
+Start the application with Docker Compose:
+```docker-compose up```
