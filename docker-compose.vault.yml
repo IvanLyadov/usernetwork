@@ -1,0 +1,31 @@
+version: '3.6'
+services:
+  vault:
+    image: vault:1.10.3
+    container_name: vault
+    restart: on-failure:10
+    ports:
+      - "8200:8200"
+    environment:
+      VAULT_ADDR: 'http://0.0.0.0:8200'
+      VAULT_LOCAL_CONFIG: '{"listener": [{"tcp":{"address": "0.0.0.0:8201","tls_disable":"1"}}], "default_lease_ttl": "168h", "max_lease_ttl": "720h", "ui": true}'
+      VAULT_DEV_ROOT_TOKEN_ID: '0000-0000-0000-0000'
+      VAULT_TOKEN: '0000-0000-0000-0000'
+    cap_add:
+      - IPC_LOCK
+    volumes:
+      - vault-volume:/data
+    healthcheck:
+      test: ["CMD-SHELL", "curl --silent --fail http://localhost:8200/v1/sys/health || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+    command: server -dev -dev-root-token-id="0000-0000-0000-0000"
+    networks:
+      - sk_cloud
+
+volumes:
+  vault-volume:
+
+networks:
+  sk_cloud:
