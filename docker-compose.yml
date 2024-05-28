@@ -1,35 +1,25 @@
 version: '3.8'
 
 services:
-  vault:
-    image: vault:latest
-    container_name: vault
-    environment:
-      VAULT_DEV_ROOT_TOKEN_ID: "0000-0000-0000-0000"
-    entrypoint: /vault/config/vault-entrypoint.sh
-    ports:
-      - "8200:8200"
-    cap_add:
-      - IPC_LOCK
-    volumes:
-      - ./vault/config:/vault/config
-
-  user-api:
-    image: user-api:latest
-    container_name: user-api
-    build:
-      context: .
-      dockerfile: Dockerfile
-    environment:
-      - VAULT_ADDR=http://vault:8200
-      - VAULT_TOKEN=0000-0000-0000-0000
-    depends_on:
-      - vault
+  app:
+    build: .
     ports:
       - "8080:8080"
-    networks:
-      - vault-network
+    environment:
+      - SPRING_PROFILES_ACTIVE=prod
+    depends_on:
+      - db
 
-networks:
-  vault-network:
-    driver: bridge
+  db:
+    image: postgres:latest
+    environment:
+      POSTGRES_USER: user
+      POSTGRES_PASSWORD: password
+      POSTGRES_DB: mydatabase
+    ports:
+      - "5432:5432"
+    volumes:
+      - db-data:/var/lib/postgresql/data
+
+volumes:
+  db-data:

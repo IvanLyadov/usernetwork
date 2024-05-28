@@ -1,14 +1,27 @@
-# Use an official OpenJDK runtime as a parent image
-FROM openjdk:11-jre-slim
+# Use an official Maven image with JDK 17 to build the project
+FROM maven:3.8.5-openjdk-17 AS build
 
-# Set the working directory inside the container
+# Set the working directory
 WORKDIR /app
 
-# Copy the executable JAR into the container
-COPY target/user-api-0.0.1-SNAPSHOT.jar /app/user-api.jar
+# Copy the pom.xml and the source code
+COPY pom.xml .
+COPY src ./src
 
-# Expose port 8080
+# Package the application
+RUN mvn clean package -DskipTests
+
+# Use an official OpenJDK image with JDK 17 to run the application
+FROM openjdk:17-jdk-slim
+
+# Set the working directory
+WORKDIR /app
+
+# Copy the packaged jar file from the build stage
+COPY --from=build /app/target/*.jar app.jar
+
+# Expose the application port
 EXPOSE 8080
 
-# Run the JAR file
-ENTRYPOINT ["java", "-jar", "/app/user-api.jar"]
+# Run the application
+ENTRYPOINT ["java", "-jar", "app.jar"]

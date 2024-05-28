@@ -44,8 +44,23 @@ vault kv get secret/demoapi
 ## Using Docker
 ### Build the Docker image:
 
-Run the following command in the root of your project directory (where the Dockerfile is located):
-```docker build -t user-api```
+[//]: # (Run the following command in the root of your project directory &#40;where the Dockerfile is located&#41;:)
 
-Start the application with Docker Compose:
-```docker-compose up```
+[//]: # (```docker build -t user-api```)
+
+[//]: # (Start the application with Docker Compose:)
+[//]: # (```docker-compose up```)
+
+To start Vault server with Docker Compose run folowing command:
+```shell 
+docker-compose -f docker-compose.vault.yml up
+```
+
+### Add Vault data go to docker container:
+```shell 
+docker exec -it vault /bin/sh
+```
+Run this command inside docker container with Vault server:
+```shell
+vault kv put secret/demoapi username=default password=cOBY8tbHMMK.E
+```
