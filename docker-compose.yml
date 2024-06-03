@@ -1,25 +1,18 @@
-version: '3.8'
+version: '3.6'
 
 services:
-  app:
-    build: .
+  springboot-app:
+    image: your-springboot-app-image
+    container_name: springboot-app
+    restart: always
     ports:
       - "8080:8080"
     environment:
-      - SPRING_PROFILES_ACTIVE=prod
-    depends_on:
-      - db
+      VAULT_ADDR: 'http://vault:8200'
+      SPRING_PROFILES_ACTIVE: 'docker'
+    networks:
+      - sk_cloud
 
-  db:
-    image: postgres:latest
-    environment:
-      POSTGRES_USER: user
-      POSTGRES_PASSWORD: password
-      POSTGRES_DB: mydatabase
-    ports:
-      - "5432:5432"
-    volumes:
-      - db-data:/var/lib/postgresql/data
-
-volumes:
-  db-data:
+networks:
+  sk_cloud:
+    external: true
