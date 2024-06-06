@@ -63,8 +63,8 @@ public class UserController {
     @GetMapping("/vault-credentials")
     public ResponseEntity<Map<String, String>> getVaultCredentials() {
         Map<String, String> credentials = Map.of(
-                "username", vaultConfig.getUsername(),
-                "password", vaultConfig.getPassword()
+                "user id", vaultConfig.getUser(),
+                "user secret", vaultConfig.getSecret()
         );
         return ResponseEntity.ok(credentials);
     }
