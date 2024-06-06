@@ -17,8 +17,10 @@ public class DataSourceConfig {
     public DataSource dataSource() {
         HikariDataSource dataSource = new HikariDataSource();
         dataSource.setJdbcUrl("jdbc:clickhouse://mu4s7vj2j6.us-east-1.aws.clickhouse.cloud:8443?ssl=true");
-        dataSource.setUsername(vaultConfig.getUsername());
-        dataSource.setPassword(vaultConfig.getPassword());
+//        dataSource.setUsername(vaultConfig.getUser());
+//        dataSource.setPassword(vaultConfig.getSecret());
+        dataSource.setUsername("default");
+        dataSource.setPassword("cOBY8tbHMMK.E");
         dataSource.setDriverClassName("com.clickhouse.jdbc.ClickHouseDriver");
         return dataSource;
     }

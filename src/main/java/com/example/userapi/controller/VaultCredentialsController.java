@@ -16,8 +16,8 @@ public class VaultCredentialsController {
 
     @GetMapping("/credentials")
     public String getVaultCredentials(Model model) {
-        model.addAttribute("username", vaultConfig.getUsername());
-        model.addAttribute("password", vaultConfig.getPassword());
+        model.addAttribute("username", vaultConfig.getUser());
+        model.addAttribute("password", vaultConfig.getSecret());
         return "vault-credentials";
     }
 }

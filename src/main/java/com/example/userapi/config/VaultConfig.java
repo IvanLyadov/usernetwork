@@ -14,34 +14,35 @@ public class VaultConfig {
     @Autowired
     private VaultTemplate vaultTemplate;
 
-    private String username;
-    private String password;
+    private String secret;
+    private String user;
 
     // Getters and Setters
-    public String getUsername() {
-        return username;
+    public String getUser() {
+        return user;
     }
 
-    public void setUsername(String username) {
-        this.username = username;
+    public void setUser(String user) {
+        this.user = user;
     }
 
-    public String getPassword() {
-        return password;
+    public String getSecret() {
+        return secret;
     }
 
-    public void setPassword(String password) {
-        this.password = password;
+    public void setSecret(String secret) {
+        this.secret = secret;
     }
 
     @PostConstruct
     public void init() {
         VaultResponse response = vaultTemplate.opsForKeyValue("secret", VaultKeyValueOperationsSupport.KeyValueBackend.KV_2).get("demoapi");
         if (response != null && response.getData() != null) {
-            this.username = (String) response.getData().get("username");
-            this.password = (String) response.getData().get("password");
+
+            this.secret = (String) response.getData().get("secret");
+            this.user = (String) response.getData().get("user");
         }
-        System.out.println("VaultConfig - Username: " + username);
-        System.out.println("VaultConfig - Password: " + password);
+        System.out.println("VaultConfig - secret: " + secret);
+        System.out.println("VaultConfig - user: " + user);
     }
 }
