@@ -55,8 +55,7 @@ public class ItemService {
     @Transactional
     public Item createItem(Item item, String token) {
         String userId = validateTokenAndGetUserId(token);
-        System.out.println("userId2 = " + userId);
-        validatePolicy(userId, "create");
+        validatePolicy(userId, "create", item.getSectorId());
         item.setUserId(userId);
         item.setId(generateItemId());
         logger.info("Creating item: " + item.toString());
@@ -68,17 +67,25 @@ public class ItemService {
     @Transactional
     public Item updateItem(Long id, Item itemDetails, String token) {
         String userId = validateTokenAndGetUserId(token);
-        validatePolicy(userId, "update");
+        validatePolicy(userId, "update", itemDetails.getSectorId());
         Item item = itemRepository.findById(id).orElseThrow(() -> new RuntimeException("Item not found"));
         item.setDescription(itemDetails.getDescription());
+        item.setSectorId(itemDetails.getSectorId());
         return itemRepository.save(item);
     }
 
     @Transactional
     public void deleteItem(Long id, String token) {
         String userId = validateTokenAndGetUserId(token);
-        validatePolicy(userId, "delete");
+        validatePolicy(userId, "delete", null);
         itemRepository.deleteById(id);
+    }
+
+    @Transactional(readOnly = true)
+    public List<Item> getItemsBySector(String sectorId, String token) {
+        String userId = validateTokenAndGetUserId(token);
+        validatePolicy(userId, "list", sectorId);
+        return itemRepository.findBySectorId(sectorId);
     }
 
     private void validateToken(String token) {
@@ -101,17 +108,15 @@ public class ItemService {
         if (!token.equals(storedToken)) {
             throw new RuntimeException("Invalid token");
         }
-        String userId = (String) response.getData().get("user");
-//        if (!userRepository.existsById(userId)) {
-//            throw new RuntimeException("User not found");
-//        }
-        return userId;
+        return (String) response.getData().get("user");
     }
 
-    private void validatePolicy(String userId, String operation) {
-        System.out.println("userId = " + userId);
+    private void validatePolicy(String userId, String operation, String sectorId) {
         User user = userRepository.findById(userId).orElseThrow(() -> new RuntimeException("User not found"));
         Set<Policy> policies = user.getPolicies();
+        boolean operationAllowed = false;
+        boolean sectorAllowed = (sectorId == null); // If sectorId is null, skip sector check
+
         for (Policy policy : policies) {
             try {
                 ObjectMapper mapper = new ObjectMapper();
@@ -120,15 +125,39 @@ public class ItemService {
                 if (allowedOperations != null && allowedOperations.isArray()) {
                     for (JsonNode allowedOperation : allowedOperations) {
                         if (allowedOperation.asText().equals(operation)) {
-                            return;
+                            operationAllowed = true;
+                            break;
                         }
                     }
+                }
+
+                if (sectorId != null) {
+                    JsonNode allowedSectors = policyDefinition.get("allowedSectors");
+                    if (allowedSectors != null && allowedSectors.isArray()) {
+                        for (JsonNode allowedSector : allowedSectors) {
+                            if (allowedSector.asText().equals(sectorId)) {
+                                sectorAllowed = true;
+                                break;
+                            }
+                        }
+                    }
+                }
+
+                if (operationAllowed && sectorAllowed) {
+                    return;
                 }
             } catch (Exception e) {
                 throw new RuntimeException("Error parsing policy definition", e);
             }
         }
-        throw new RuntimeException("User does not have permission to perform this operation");
+
+        if (!operationAllowed) {
+            throw new RuntimeException("User does not have permission to perform this operation");
+        }
+
+        if (!sectorAllowed) {
+            throw new RuntimeException("User does not have permission to access this sector");
+        }
     }
 
     private Long generateItemId() {

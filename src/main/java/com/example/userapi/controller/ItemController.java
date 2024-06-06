@@ -43,4 +43,9 @@ public class ItemController {
         itemService.deleteItem(id, token);
         return ResponseEntity.noContent().build();
     }
+
+    @GetMapping("/sector/{sectorId}")
+    public List<Item> getItemsBySector(@PathVariable String sectorId, @RequestHeader("token") String token) {
+        return itemService.getItemsBySector(sectorId, token);
+    }
 }
