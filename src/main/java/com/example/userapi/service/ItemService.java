@@ -1,7 +1,12 @@
 package com.example.userapi.service;
 
 import com.example.userapi.model.Item;
+import com.example.userapi.model.Policy;
+import com.example.userapi.model.User;
 import com.example.userapi.repository.ItemRepository;
+import com.example.userapi.repository.UserRepository;
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -12,6 +17,7 @@ import org.springframework.vault.support.VaultResponse;
 
 import java.util.List;
 import java.util.Optional;
+import java.util.Set;
 import java.util.logging.Logger;
 
 @Service
@@ -21,6 +27,9 @@ public class ItemService {
 
     @Autowired
     private ItemRepository itemRepository;
+
+    @Autowired
+    private UserRepository userRepository;
 
     @Autowired
     private VaultTemplate vaultTemplate;
@@ -46,6 +55,8 @@ public class ItemService {
     @Transactional
     public Item createItem(Item item, String token) {
         String userId = validateTokenAndGetUserId(token);
+        System.out.println("userId2 = " + userId);
+        validatePolicy(userId, "create");
         item.setUserId(userId);
         item.setId(generateItemId());
         logger.info("Creating item: " + item.toString());
@@ -56,7 +67,8 @@ public class ItemService {
 
     @Transactional
     public Item updateItem(Long id, Item itemDetails, String token) {
-        validateToken(token);
+        String userId = validateTokenAndGetUserId(token);
+        validatePolicy(userId, "update");
         Item item = itemRepository.findById(id).orElseThrow(() -> new RuntimeException("Item not found"));
         item.setDescription(itemDetails.getDescription());
         return itemRepository.save(item);
@@ -64,7 +76,8 @@ public class ItemService {
 
     @Transactional
     public void deleteItem(Long id, String token) {
-        validateToken(token);
+        String userId = validateTokenAndGetUserId(token);
+        validatePolicy(userId, "delete");
         itemRepository.deleteById(id);
     }
 
@@ -88,12 +101,38 @@ public class ItemService {
         if (!token.equals(storedToken)) {
             throw new RuntimeException("Invalid token");
         }
-        return (String) response.getData().get("user");
+        String userId = (String) response.getData().get("user");
+//        if (!userRepository.existsById(userId)) {
+//            throw new RuntimeException("User not found");
+//        }
+        return userId;
+    }
+
+    private void validatePolicy(String userId, String operation) {
+        System.out.println("userId = " + userId);
+        User user = userRepository.findById(userId).orElseThrow(() -> new RuntimeException("User not found"));
+        Set<Policy> policies = user.getPolicies();
+        for (Policy policy : policies) {
+            try {
+                ObjectMapper mapper = new ObjectMapper();
+                JsonNode policyDefinition = mapper.readTree(policy.getDefinition());
+                JsonNode allowedOperations = policyDefinition.get("allowedOperations");
+                if (allowedOperations != null && allowedOperations.isArray()) {
+                    for (JsonNode allowedOperation : allowedOperations) {
+                        if (allowedOperation.asText().equals(operation)) {
+                            return;
+                        }
+                    }
+                }
+            } catch (Exception e) {
+                throw new RuntimeException("Error parsing policy definition", e);
+            }
+        }
+        throw new RuntimeException("User does not have permission to perform this operation");
     }
 
     private Long generateItemId() {
         // Implement your logic to generate a unique ID
-        // For example, you can use a sequence or a combination of current timestamp and a random number
         return System.currentTimeMillis(); // Just an example
     }
 }
