@@ -1,6 +1,7 @@
 package com.example.userapi.model;
 
 import jakarta.persistence.*;
+
 import java.util.Set;
 
 @Entity
