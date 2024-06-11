@@ -56,7 +56,7 @@ public class ItemService {
     public Item createItem(Item item, String token) {
         String userId = validateTokenAndGetUserId(token);
         validatePolicy(userId, "create", item.getSectorId());
-        item.setUserId(userId);
+        item.setUserId(userId); // Set the user ID instead of the username
         item.setId(generateItemId());
         logger.info("Creating item: " + item.toString());
         Item savedItem = itemRepository.save(item);
@@ -117,6 +117,8 @@ public class ItemService {
         boolean operationAllowed = false;
         boolean sectorAllowed = (sectorId == null); // If sectorId is null, skip sector check
 
+        System.out.println("Validating policy for user ID: " + userId + " for operation: " + operation + " in sector: " + sectorId);
+
         for (Policy policy : policies) {
             try {
                 ObjectMapper mapper = new ObjectMapper();
@@ -133,7 +135,11 @@ public class ItemService {
 
                 if (sectorId != null) {
                     JsonNode allowedSectors = policyDefinition.get("allowedSectors");
-                    if (allowedSectors != null && allowedSectors.isArray()) {
+                    if (allowedSectors == null) {
+                        // If no allowedSectors are defined, allow all sectors
+                        sectorAllowed = true;
+                        System.out.println("No allowed sectors defined, access to all sectors allowed.");
+                    } else if (allowedSectors.isArray()) {
                         for (JsonNode allowedSector : allowedSectors) {
                             if (allowedSector.asText().equals(sectorId)) {
                                 sectorAllowed = true;
@@ -143,7 +149,10 @@ public class ItemService {
                     }
                 }
 
+                System.out.println("Operation allowed: " + operationAllowed + ", Sector allowed: " + sectorAllowed);
+
                 if (operationAllowed && sectorAllowed) {
+                    System.out.println("Operation and sector are allowed.");
                     return;
                 }
             } catch (Exception e) {
@@ -152,13 +161,17 @@ public class ItemService {
         }
 
         if (!operationAllowed) {
+            System.out.println("Operation not allowed.");
             throw new RuntimeException("User does not have permission to perform this operation");
         }
 
         if (!sectorAllowed) {
+            System.out.println("Sector not allowed.");
             throw new RuntimeException("User does not have permission to access this sector");
         }
     }
+
+
 
     private Long generateItemId() {
         // Implement your logic to generate a unique ID
