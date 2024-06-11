@@ -47,16 +47,17 @@ public class ItemService {
     }
 
     @Transactional(readOnly = true)
-    public Optional<Item> getItemById(Long id, String token) {
-        validateToken(token);
-        return itemRepository.findById(id);
+    public Optional<Item> getItemById(Long id, String userId, String token) {
+        Item item = itemRepository.findById(id).orElseThrow(() -> new RuntimeException("Item not found"));
+        validateToken(userId, token);
+        return Optional.of(item);
     }
 
     @Transactional
-    public Item createItem(Item item, String token) {
-        String userId = validateTokenAndGetUserId(token);
+    public Item createItem(Item item, String userId, String token) {
+        validateToken(userId, token);
         validatePolicy(userId, "create", item.getSectorId());
-        item.setUserId(userId); // Set the user ID instead of the username
+        item.setUserId(userId);
         item.setId(generateItemId());
         logger.info("Creating item: " + item.toString());
         Item savedItem = itemRepository.save(item);
@@ -65,31 +66,33 @@ public class ItemService {
     }
 
     @Transactional
-    public Item updateItem(Long id, Item itemDetails, String token) {
-        String userId = validateTokenAndGetUserId(token);
-        validatePolicy(userId, "update", itemDetails.getSectorId());
+    public Item updateItem(Long id, Item itemDetails, String userId, String token) {
         Item item = itemRepository.findById(id).orElseThrow(() -> new RuntimeException("Item not found"));
+        validateToken(userId, token);
+        validatePolicy(userId, "update", itemDetails.getSectorId());
         item.setDescription(itemDetails.getDescription());
         item.setSectorId(itemDetails.getSectorId());
         return itemRepository.save(item);
     }
 
     @Transactional
-    public void deleteItem(Long id, String token) {
-        String userId = validateTokenAndGetUserId(token);
+    public void deleteItem(Long id, String userId, String token) {
+        Item item = itemRepository.findById(id).orElseThrow(() -> new RuntimeException("Item not found"));
+        validateToken(userId, token);
         validatePolicy(userId, "delete", null);
         itemRepository.deleteById(id);
     }
 
     @Transactional(readOnly = true)
-    public List<Item> getItemsBySector(String sectorId, String token) {
-        String userId = validateTokenAndGetUserId(token);
+    public List<Item> getItemsBySector(String sectorId, String userId, String token) {
+        validateToken(userId, token);
         validatePolicy(userId, "list", sectorId);
         return itemRepository.findBySectorId(sectorId);
     }
 
-    private void validateToken(String token) {
-        VaultResponse response = kvOperations.get("demoapi");
+    private void validateToken(String userId, String token) {
+        String vaultPath = "user-secrets/" + userId;
+        VaultResponse response = kvOperations.get(vaultPath);
         if (response == null || response.getData() == null) {
             throw new RuntimeException("Invalid token");
         }
@@ -99,8 +102,9 @@ public class ItemService {
         }
     }
 
-    private String validateTokenAndGetUserId(String token) {
-        VaultResponse response = kvOperations.get("demoapi");
+    private String validateTokenAndGetUserId(String userId, String token) {
+        String vaultPath = "user-secrets/" + userId;
+        VaultResponse response = kvOperations.get(vaultPath);
         if (response == null || response.getData() == null) {
             throw new RuntimeException("Invalid token");
         }
@@ -116,8 +120,6 @@ public class ItemService {
         Set<Policy> policies = user.getPolicies();
         boolean operationAllowed = false;
         boolean sectorAllowed = (sectorId == null); // If sectorId is null, skip sector check
-
-        System.out.println("Validating policy for user ID: " + userId + " for operation: " + operation + " in sector: " + sectorId);
 
         for (Policy policy : policies) {
             try {
@@ -138,7 +140,6 @@ public class ItemService {
                     if (allowedSectors == null) {
                         // If no allowedSectors are defined, allow all sectors
                         sectorAllowed = true;
-                        System.out.println("No allowed sectors defined, access to all sectors allowed.");
                     } else if (allowedSectors.isArray()) {
                         for (JsonNode allowedSector : allowedSectors) {
                             if (allowedSector.asText().equals(sectorId)) {
@@ -149,10 +150,7 @@ public class ItemService {
                     }
                 }
 
-                System.out.println("Operation allowed: " + operationAllowed + ", Sector allowed: " + sectorAllowed);
-
                 if (operationAllowed && sectorAllowed) {
-                    System.out.println("Operation and sector are allowed.");
                     return;
                 }
             } catch (Exception e) {
@@ -161,17 +159,13 @@ public class ItemService {
         }
 
         if (!operationAllowed) {
-            System.out.println("Operation not allowed.");
             throw new RuntimeException("User does not have permission to perform this operation");
         }
 
         if (!sectorAllowed) {
-            System.out.println("Sector not allowed.");
             throw new RuntimeException("User does not have permission to access this sector");
         }
     }
-
-
 
     private Long generateItemId() {
         // Implement your logic to generate a unique ID

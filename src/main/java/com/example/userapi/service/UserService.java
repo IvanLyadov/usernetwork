@@ -42,7 +42,7 @@ public class UserService {
         String token = UUID.randomUUID().toString();
 
         // Store token in Vault
-        storeTokenInVault(savedUser.getUsername(), token);
+        storeTokenInVault(savedUser.getId(), token);
 
         return savedUser;
     }
@@ -54,20 +54,21 @@ public class UserService {
     }
 
     public void deleteUser(String username) {
+        User user = userRepository.findById(username).orElseThrow(() -> new RuntimeException("User not found"));
         userRepository.deleteById(username);
-        deleteTokenFromVault(username);
+        deleteTokenFromVault(user.getId());
     }
 
-    private void storeTokenInVault(String username, String token) {
-        String path = "user-secrets/" + username;
+    private void storeTokenInVault(String userId, String token) {
+        String path = "user-secrets/" + userId;
         Map<String, String> data = new HashMap<>();
-        data.put("user", username);
+        data.put("user", userId);
         data.put("secret", token);
         vaultTemplate.opsForKeyValue("secret", VaultKeyValueOperationsSupport.KeyValueBackend.KV_2).put(path, data);
     }
 
-    private void deleteTokenFromVault(String username) {
-        String path = "user-secrets/" + username;
+    private void deleteTokenFromVault(String userId) {
+        String path = "user-secrets/" + userId;
         vaultTemplate.opsForKeyValue("secret", VaultKeyValueOperationsSupport.KeyValueBackend.KV_2).delete(path);
     }
 }
