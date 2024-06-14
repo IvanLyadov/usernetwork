@@ -1,6 +1,8 @@
 package com.example.userapi.service;
 
+import com.example.userapi.model.Policy;
 import com.example.userapi.model.User;
+import com.example.userapi.repository.PolicyRepository;
 import com.example.userapi.repository.UserRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -11,93 +13,136 @@ import org.springframework.vault.core.VaultKeyValueOperations;
 import org.springframework.vault.core.VaultKeyValueOperationsSupport;
 import org.springframework.vault.core.VaultTemplate;
 
-import java.util.Arrays;
-import java.util.List;
-import java.util.Optional;
-import java.util.UUID;
+import java.util.*;
 
-import static org.junit.jupiter.api.Assertions.*;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.*;
 
-class UserServiceTest {
+public class UserServiceTest {
 
     @Mock
     private UserRepository userRepository;
 
     @Mock
-    private VaultTemplate vaultTemplate;
+    private PolicyRepository policyRepository;
 
     @Mock
-    private VaultKeyValueOperations kvOperations;
+    private VaultTemplate vaultTemplate;
 
     @InjectMocks
     private UserService userService;
 
+    private User user;
+    private Policy policy;
+
     @BeforeEach
     void setUp() {
         MockitoAnnotations.openMocks(this);
-        when(vaultTemplate.opsForKeyValue(anyString(), any(VaultKeyValueOperationsSupport.KeyValueBackend.class))).thenReturn(kvOperations);
+        user = new User();
+        user.setId("1");
+        user.setUsername("testuser");
+        user.setEmail("testuser@example.com");
+
+        policy = new Policy();
+        policy.setId(3L);
+        policy.setName("defaultPolicy");
+        policy.setDefinition("{\"allowedOperations\": [\"create\", \"update\"]}");
     }
 
     @Test
-    void testGetAllUsers() {
-        List<User> users = Arrays.asList(new User(), new User());
+    public void testGetAllUsers() {
+        List<User> users = Arrays.asList(user);
         when(userRepository.findAll()).thenReturn(users);
 
         List<User> result = userService.getAllUsers();
-        assertEquals(2, result.size());
-        verify(userRepository, times(1)).findAll();
+
+        assertEquals(1, result.size());
+        assertEquals("testuser", result.get(0).getUsername());
     }
 
     @Test
-    void testGetUserByUsername() {
-        User user = new User();
-        when(userRepository.findById(anyString())).thenReturn(Optional.of(user));
+    public void testGetUserByUsername() {
+        when(userRepository.findById("testuser")).thenReturn(Optional.of(user));
 
-        Optional<User> result = userService.getUserByUsername("username");
-        assertTrue(result.isPresent());
-        assertEquals(user, result.get());
+        Optional<User> result = userService.getUserByUsername("testuser");
+
+        assertEquals(true, result.isPresent());
+        assertEquals("testuser", result.get().getUsername());
     }
 
     @Test
-    void testCreateUser() {
-        User user = new User();
-        user.setUsername("username");
+    public void testCreateUser() {
+        when(policyRepository.findById(3L)).thenReturn(Optional.of(policy));
         when(userRepository.save(any(User.class))).thenReturn(user);
-        doNothing().when(kvOperations).put(anyString(), any());
+        VaultKeyValueOperations kvOperations = mock(VaultKeyValueOperations.class);
+        when(vaultTemplate.opsForKeyValue("secret", VaultKeyValueOperationsSupport.KeyValueBackend.KV_2)).thenReturn(kvOperations);
 
         User result = userService.createUser(user);
-        assertNotNull(result);
-        assertNotNull(result.getId());
-        verify(userRepository, times(1)).save(user);
-        verify(kvOperations, times(1)).put(anyString(), any());
+
+        assertEquals("testuser", result.getUsername());
+        verify(userRepository, times(1)).save(any(User.class));
+        verify(vaultTemplate, times(1)).opsForKeyValue("secret", VaultKeyValueOperationsSupport.KeyValueBackend.KV_2);
+        verify(kvOperations, times(1)).put(anyString(), any(Map.class));
     }
 
     @Test
-    void testUpdateUser() {
-        User existingUser = new User();
-        existingUser.setUsername("username");
-        existingUser.setEmail("old@example.com");
+    public void testCreateUser_PolicyNotFound() {
+        when(policyRepository.findById(3L)).thenReturn(Optional.empty());
 
-        when(userRepository.findById(anyString())).thenReturn(Optional.of(existingUser));
-        when(userRepository.save(any(User.class))).thenReturn(existingUser);
+        RuntimeException exception = assertThrows(RuntimeException.class, () -> {
+            userService.createUser(user);
+        });
 
-        User userDetails = new User();
-        userDetails.setEmail("new@example.com");
-
-        User result = userService.updateUser("username", userDetails);
-        assertEquals("new@example.com", result.getEmail());
+        assertEquals("Error creating user: Default policy not found", exception.getMessage());
     }
 
     @Test
-    void testDeleteUser() {
-        doNothing().when(userRepository).deleteById(anyString());
-        doNothing().when(kvOperations).delete(anyString());
+    public void testUpdateUser() {
+        when(userRepository.findById("testuser")).thenReturn(Optional.of(user));
+        when(userRepository.save(any(User.class))).thenReturn(user);
 
-        userService.deleteUser("username");
-        verify(userRepository, times(1)).deleteById("username");
+        User result = userService.updateUser("testuser", user);
+
+        assertEquals("testuser", result.getUsername());
+        verify(userRepository, times(1)).save(any(User.class));
+    }
+
+    @Test
+    public void testUpdateUser_UserNotFound() {
+        when(userRepository.findById("testuser")).thenReturn(Optional.empty());
+
+        RuntimeException exception = assertThrows(RuntimeException.class, () -> {
+            userService.updateUser("testuser", user);
+        });
+
+        assertEquals("Error updating user: User not found", exception.getMessage());
+    }
+
+    @Test
+    public void testDeleteUser() {
+        when(userRepository.findById("testuser")).thenReturn(Optional.of(user));
+        doNothing().when(userRepository).deleteById("testuser");
+        VaultKeyValueOperations kvOperations = mock(VaultKeyValueOperations.class);
+        when(vaultTemplate.opsForKeyValue("secret", VaultKeyValueOperationsSupport.KeyValueBackend.KV_2)).thenReturn(kvOperations);
+
+        userService.deleteUser("testuser");
+
+        verify(userRepository, times(1)).deleteById("testuser");
+        verify(vaultTemplate, times(1)).opsForKeyValue("secret", VaultKeyValueOperationsSupport.KeyValueBackend.KV_2);
         verify(kvOperations, times(1)).delete(anyString());
+    }
+
+    @Test
+    public void testDeleteUser_UserNotFound() {
+        when(userRepository.findById("testuser")).thenReturn(Optional.empty());
+
+        RuntimeException exception = assertThrows(RuntimeException.class, () -> {
+            userService.deleteUser("testuser");
+        });
+
+        assertEquals("Error deleting user: User not found", exception.getMessage());
     }
 }

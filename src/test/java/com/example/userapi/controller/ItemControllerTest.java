@@ -7,19 +7,19 @@ import org.junit.jupiter.api.Test;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.MockitoAnnotations;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 
 import java.util.Arrays;
 import java.util.List;
 import java.util.Optional;
 
-import static org.junit.jupiter.api.Assertions.*;
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyLong;
-import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.*;
 
-class ItemControllerTest {
+public class ItemControllerTest {
 
     @Mock
     private ItemService itemService;
@@ -27,123 +27,83 @@ class ItemControllerTest {
     @InjectMocks
     private ItemController itemController;
 
+    private Item item;
+
     @BeforeEach
     void setUp() {
         MockitoAnnotations.openMocks(this);
+        item = new Item();
+        item.setId(1L);
+        item.setName("testItem");
+        item.setDescription("This is a test item");
     }
 
     @Test
-    void getAllItems() {
-        // Given
-        Item item1 = new Item();
-        item1.setId(1L);
-        Item item2 = new Item();
-        item2.setId(2L);
-        List<Item> items = Arrays.asList(item1, item2);
+    public void testGetAllItems() {
+        List<Item> items = Arrays.asList(item);
         when(itemService.getAllItems()).thenReturn(items);
 
-        // When
-        List<Item> result = itemController.getAllItems("token");
+        List<Item> result = itemController.getAllItems("userId", "token");
 
-        // Then
-        assertNotNull(result);
-        assertEquals(2, result.size());
-        verify(itemService, times(1)).getAllItems();
+        assertEquals(1, result.size());
+        assertEquals("testItem", result.get(0).getName());
     }
 
     @Test
-    void getItemById() {
-        // Given
-        Item item = new Item();
-        item.setId(1L);
-        when(itemService.getItemById(anyLong(), anyString())).thenReturn(Optional.of(item));
+    public void testGetItemById() {
+        when(itemService.getItemById(anyLong(), anyString(), anyString())).thenReturn(Optional.of(item));
 
-        // When
-        ResponseEntity<Item> response = itemController.getItemById(1L, "token");
+        ResponseEntity<Item> response = itemController.getItemById(1L, "userId", "token");
 
-        // Then
-        assertNotNull(response);
-        assertTrue(response.getStatusCode().is2xxSuccessful());
-        assertNotNull(response.getBody());
-        assertEquals(1L, response.getBody().getId());
-        verify(itemService, times(1)).getItemById(anyLong(), anyString());
+        assertEquals(HttpStatus.OK, response.getStatusCode());
+        assertEquals("testItem", response.getBody().getName());
     }
 
     @Test
-    void getItemById_NotFound() {
-        // Given
-        when(itemService.getItemById(anyLong(), anyString())).thenReturn(Optional.empty());
+    public void testGetItemById_NotFound() {
+        when(itemService.getItemById(anyLong(), anyString(), anyString())).thenReturn(Optional.empty());
 
-        // When
-        ResponseEntity<Item> response = itemController.getItemById(1L, "token");
+        ResponseEntity<Item> response = itemController.getItemById(1L, "userId", "token");
 
-        // Then
-        assertNotNull(response);
-        assertTrue(response.getStatusCode().is4xxClientError());
-        verify(itemService, times(1)).getItemById(anyLong(), anyString());
+        assertEquals(HttpStatus.NOT_FOUND, response.getStatusCode());
     }
 
     @Test
-    void createItem() {
-        // Given
-        Item item = new Item();
-        item.setId(1L);
-        when(itemService.createItem(any(Item.class), anyString())).thenReturn(item);
+    public void testCreateItem() {
+        when(itemService.createItem(any(Item.class), anyString(), anyString())).thenReturn(item);
 
-        // When
-        Item createdItem = itemController.createItem(item, "token");
+        Item result = itemController.createItem(item, "userId", "token");
 
-        // Then
-        assertNotNull(createdItem);
-        assertEquals(1L, createdItem.getId());
-        verify(itemService, times(1)).createItem(any(Item.class), anyString());
+        assertEquals("testItem", result.getName());
     }
 
     @Test
-    void updateItem() {
-        // Given
-        Item item = new Item();
-        item.setId(1L);
-        when(itemService.updateItem(anyLong(), any(Item.class), anyString())).thenReturn(item);
+    public void testUpdateItem() {
+        when(itemService.updateItem(anyLong(), any(Item.class), anyString(), anyString())).thenReturn(item);
 
-        // When
-        ResponseEntity<Item> response = itemController.updateItem(1L, item, "token");
+        ResponseEntity<Item> response = itemController.updateItem(1L, item, "userId", "token");
 
-        // Then
-        assertNotNull(response);
-        assertTrue(response.getStatusCode().is2xxSuccessful());
-        assertNotNull(response.getBody());
-        assertEquals(1L, response.getBody().getId());
-        verify(itemService, times(1)).updateItem(anyLong(), any(Item.class), anyString());
+        assertEquals(HttpStatus.OK, response.getStatusCode());
+        assertEquals("testItem", response.getBody().getName());
     }
 
     @Test
-    void deleteItem() {
-        // When
-        ResponseEntity<Void> response = itemController.deleteItem(1L, "token");
+    public void testDeleteItem() {
+        doNothing().when(itemService).deleteItem(anyLong(), anyString(), anyString());
 
-        // Then
-        assertNotNull(response);
-        assertTrue(response.getStatusCode().is2xxSuccessful());
-        verify(itemService, times(1)).deleteItem(anyLong(), anyString());
+        ResponseEntity<Void> response = itemController.deleteItem(1L, "userId", "token");
+
+        assertEquals(HttpStatus.NO_CONTENT, response.getStatusCode());
     }
 
     @Test
-    void getItemsBySector() {
-        // Given
-        Item item1 = new Item();
-        item1.setId(1L);
-        Item item2 = new Item();
-        item2.setId(2L);
-        List<Item> items = Arrays.asList(item1, item2);
-        when(itemService.getItemsBySector(anyString(), anyString())).thenReturn(items);
+    public void testGetItemsBySector() {
+        List<Item> items = Arrays.asList(item);
+        when(itemService.getItemsBySector(anyString(), anyString(), anyString())).thenReturn(items);
 
-        // When
-        List<Item> result = itemController.getItemsBySector("sector1", "token");
+        List<Item> result = itemController.getItemsBySector("sectorId", "userId", "token");
 
-        // Then
-        assertNotNull(result);
-        assertEquals(2, result.size());
-        verify(itemService, times(1)).getItemsBySector(anyString(), anyString());
+        assertEquals(1, result.size());
+        assertEquals("testItem", result.get(0).getName());
     }
 }

@@ -47,14 +47,15 @@ public class ItemService {
     }
 
     @Transactional(readOnly = true)
-    public Optional<Item> getItemById(Long id, String token) {
-        validateToken(token);
-        return itemRepository.findById(id);
+    public Optional<Item> getItemById(Long id, String userId, String token) {
+        Item item = itemRepository.findById(id).orElseThrow(() -> new RuntimeException("Item not found"));
+        validateToken(userId, token);
+        return Optional.of(item);
     }
 
     @Transactional
-    public Item createItem(Item item, String token) {
-        String userId = validateTokenAndGetUserId(token);
+    public Item createItem(Item item, String userId, String token) {
+        validateToken(userId, token);
         validatePolicy(userId, "create", item.getSectorId());
         item.setUserId(userId);
         item.setId(generateItemId());
@@ -65,31 +66,33 @@ public class ItemService {
     }
 
     @Transactional
-    public Item updateItem(Long id, Item itemDetails, String token) {
-        String userId = validateTokenAndGetUserId(token);
-        validatePolicy(userId, "update", itemDetails.getSectorId());
+    public Item updateItem(Long id, Item itemDetails, String userId, String token) {
         Item item = itemRepository.findById(id).orElseThrow(() -> new RuntimeException("Item not found"));
+        validateToken(userId, token);
+        validatePolicy(userId, "update", itemDetails.getSectorId());
         item.setDescription(itemDetails.getDescription());
         item.setSectorId(itemDetails.getSectorId());
         return itemRepository.save(item);
     }
 
     @Transactional
-    public void deleteItem(Long id, String token) {
-        String userId = validateTokenAndGetUserId(token);
+    public void deleteItem(Long id, String userId, String token) {
+        Item item = itemRepository.findById(id).orElseThrow(() -> new RuntimeException("Item not found"));
+        validateToken(userId, token);
         validatePolicy(userId, "delete", null);
         itemRepository.deleteById(id);
     }
 
     @Transactional(readOnly = true)
-    public List<Item> getItemsBySector(String sectorId, String token) {
-        String userId = validateTokenAndGetUserId(token);
+    public List<Item> getItemsBySector(String sectorId, String userId, String token) {
+        validateToken(userId, token);
         validatePolicy(userId, "list", sectorId);
         return itemRepository.findBySectorId(sectorId);
     }
 
-    private void validateToken(String token) {
-        VaultResponse response = kvOperations.get("demoapi");
+    private void validateToken(String userId, String token) {
+        String vaultPath = "user-secrets/" + userId;
+        VaultResponse response = kvOperations.get(vaultPath);
         if (response == null || response.getData() == null) {
             throw new RuntimeException("Invalid token");
         }
@@ -99,8 +102,9 @@ public class ItemService {
         }
     }
 
-    private String validateTokenAndGetUserId(String token) {
-        VaultResponse response = kvOperations.get("demoapi");
+    private String validateTokenAndGetUserId(String userId, String token) {
+        String vaultPath = "user-secrets/" + userId;
+        VaultResponse response = kvOperations.get(vaultPath);
         if (response == null || response.getData() == null) {
             throw new RuntimeException("Invalid token");
         }
@@ -133,7 +137,10 @@ public class ItemService {
 
                 if (sectorId != null) {
                     JsonNode allowedSectors = policyDefinition.get("allowedSectors");
-                    if (allowedSectors != null && allowedSectors.isArray()) {
+                    if (allowedSectors == null) {
+                        // If no allowedSectors are defined, allow all sectors
+                        sectorAllowed = true;
+                    } else if (allowedSectors.isArray()) {
                         for (JsonNode allowedSector : allowedSectors) {
                             if (allowedSector.asText().equals(sectorId)) {
                                 sectorAllowed = true;

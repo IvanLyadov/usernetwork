@@ -1,7 +1,6 @@
 package com.example.userapi.model;
 
 import jakarta.persistence.*;
-
 import java.util.Set;
 
 @Entity
@@ -11,10 +10,10 @@ public class User {
     @Id
     private String id;
 
-    @Column(name = "username")
+    @Column(name = "username", unique = true, nullable = false)
     private String username;
 
-    @Column(name = "email")
+    @Column(name = "email", nullable = false)
     private String email;
 
     @ManyToMany
