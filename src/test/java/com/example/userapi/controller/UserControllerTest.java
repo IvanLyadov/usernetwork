@@ -7,18 +7,17 @@ import org.junit.jupiter.api.Test;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.MockitoAnnotations;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 
 import java.util.Arrays;
 import java.util.List;
 import java.util.Optional;
 
-import static org.junit.jupiter.api.Assertions.*;
-import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.anyString;
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.mockito.Mockito.*;
 
-class UserControllerTest {
+public class UserControllerTest {
 
     @Mock
     private UserService userService;
@@ -26,117 +25,102 @@ class UserControllerTest {
     @InjectMocks
     private UserController userController;
 
+    private User user;
+
     @BeforeEach
     void setUp() {
         MockitoAnnotations.openMocks(this);
-    }
-
-    @Test
-    void testEndpoint() {
-        // When
-        ResponseEntity<String> response = userController.testEndpoint();
-
-        // Then
-        assertNotNull(response);
-        assertTrue(response.getStatusCode().is2xxSuccessful());
-        assertEquals("Test endpoint is working", response.getBody());
-    }
-
-    @Test
-    void getAllUsers() {
-        // Given
-        User user1 = new User();
-        user1.setId("1");
-        User user2 = new User();
-        user2.setId("2");
-        List<User> users = Arrays.asList(user1, user2);
-        when(userService.getAllUsers()).thenReturn(users);
-
-        // When
-        List<User> result = userController.getAllUsers();
-
-        // Then
-        assertNotNull(result);
-        assertEquals(2, result.size());
-        verify(userService, times(1)).getAllUsers();
-    }
-
-    @Test
-    void getUserByUsername() {
-        // Given
-        User user = new User();
+        user = new User();
         user.setId("1");
         user.setUsername("testuser");
-        when(userService.getUserByUsername(anyString())).thenReturn(Optional.of(user));
+        user.setEmail("testuser@example.com");
+    }
 
-        // When
+    @Test
+    public void testGetAllUsers() {
+        List<User> users = Arrays.asList(user);
+        when(userService.getAllUsers()).thenReturn(users);
+
+        List<User> result = userController.getAllUsers();
+
+        assertEquals(1, result.size());
+        assertEquals("testuser", result.get(0).getUsername());
+    }
+
+    @Test
+    public void testGetUserByUsername() {
+        when(userService.getUserByUsername("testuser")).thenReturn(Optional.of(user));
+
         ResponseEntity<User> response = userController.getUserByUsername("testuser");
 
-        // Then
-        assertNotNull(response);
-        assertTrue(response.getStatusCode().is2xxSuccessful());
-        assertNotNull(response.getBody());
+        assertEquals(HttpStatus.OK, response.getStatusCode());
         assertEquals("testuser", response.getBody().getUsername());
-        verify(userService, times(1)).getUserByUsername(anyString());
     }
 
     @Test
-    void getUserByUsername_NotFound() {
-        // Given
-        when(userService.getUserByUsername(anyString())).thenReturn(Optional.empty());
+    public void testGetUserByUsername_NotFound() {
+        when(userService.getUserByUsername("testuser")).thenReturn(Optional.empty());
 
-        // When
         ResponseEntity<User> response = userController.getUserByUsername("testuser");
 
-        // Then
-        assertNotNull(response);
-        assertTrue(response.getStatusCode().is4xxClientError());
-        verify(userService, times(1)).getUserByUsername(anyString());
+        assertEquals(HttpStatus.NOT_FOUND, response.getStatusCode());
     }
 
     @Test
-    void createUser() {
-        // Given
-        User user = new User();
-        user.setId("1");
+    public void testCreateUser() {
         when(userService.createUser(any(User.class))).thenReturn(user);
 
-        // When
-        User createdUser = userController.createUser(user);
+        ResponseEntity<?> response = userController.createUser(user);
 
-        // Then
-        assertNotNull(createdUser);
-        assertEquals("1", createdUser.getId());
-        verify(userService, times(1)).createUser(any(User.class));
+        assertEquals(HttpStatus.CREATED, response.getStatusCode());
+        assertEquals("testuser", ((User) response.getBody()).getUsername());
     }
 
     @Test
-    void updateUser() {
-        // Given
-        User user = new User();
-        user.setId("1");
-        user.setUsername("updateduser");
+    public void testCreateUser_Exception() {
+        when(userService.createUser(any(User.class))).thenThrow(new RuntimeException("Error creating user"));
+
+        ResponseEntity<?> response = userController.createUser(user);
+
+        assertEquals(HttpStatus.INTERNAL_SERVER_ERROR, response.getStatusCode());
+        assertEquals("Error creating user", response.getBody());
+    }
+
+    @Test
+    public void testUpdateUser() {
         when(userService.updateUser(anyString(), any(User.class))).thenReturn(user);
 
-        // When
         ResponseEntity<User> response = userController.updateUser("testuser", user);
 
-        // Then
-        assertNotNull(response);
-        assertTrue(response.getStatusCode().is2xxSuccessful());
-        assertNotNull(response.getBody());
-        assertEquals("updateduser", response.getBody().getUsername());
-        verify(userService, times(1)).updateUser(anyString(), any(User.class));
+        assertEquals(HttpStatus.OK, response.getStatusCode());
+        assertEquals("testuser", response.getBody().getUsername());
     }
 
     @Test
-    void deleteUser() {
-        // When
+    public void testUpdateUser_Exception() {
+        when(userService.updateUser(anyString(), any(User.class))).thenThrow(new RuntimeException("Error updating user"));
+
+        ResponseEntity<User> response = userController.updateUser("testuser", user);
+
+        assertEquals(HttpStatus.INTERNAL_SERVER_ERROR, response.getStatusCode());
+        assertEquals(null, response.getBody());
+    }
+
+    @Test
+    public void testDeleteUser() {
+        doNothing().when(userService).deleteUser("testuser");
+
         ResponseEntity<Void> response = userController.deleteUser("testuser");
 
-        // Then
-        assertNotNull(response);
-        assertTrue(response.getStatusCode().is2xxSuccessful());
-        verify(userService, times(1)).deleteUser(anyString());
+        assertEquals(HttpStatus.NO_CONTENT, response.getStatusCode());
+    }
+
+    @Test
+    public void testDeleteUser_Exception() {
+        doThrow(new RuntimeException("Error deleting user")).when(userService).deleteUser("testuser");
+
+        ResponseEntity<Void> response = userController.deleteUser("testuser");
+
+        assertEquals(HttpStatus.INTERNAL_SERVER_ERROR, response.getStatusCode());
     }
 }
