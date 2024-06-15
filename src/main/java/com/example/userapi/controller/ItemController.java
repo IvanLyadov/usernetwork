@@ -18,7 +18,7 @@ public class ItemController {
 
     @GetMapping
     public List<Item> getAllItems(@RequestHeader("userId") String userId, @RequestHeader("token") String token) {
-        return itemService.getAllItems();
+        return itemService.getAllItems(userId, token);
     }
 
     @GetMapping("/{id}")

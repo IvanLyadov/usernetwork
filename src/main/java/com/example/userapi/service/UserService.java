@@ -42,6 +42,17 @@ public class UserService {
 
     public User createUser(User user) {
         logger.info("Starting to create user");
+
+        if (userRepository.existsByUsername(user.getUsername())) {
+            logger.error("User with username {} already exists", user.getUsername());
+            throw new RuntimeException("User with username " + user.getUsername() + " already exists");
+        }
+
+        if (userRepository.existsByEmail(user.getEmail())) {
+            logger.error("User with email {} already exists", user.getEmail());
+            throw new RuntimeException("User with email " + user.getEmail() + " already exists");
+        }
+
         try {
             // Generate a unique ID for the user
             String userId = UUID.randomUUID().toString();

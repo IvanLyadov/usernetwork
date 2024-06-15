@@ -15,6 +15,7 @@ import org.springframework.vault.core.VaultKeyValueOperationsSupport;
 import org.springframework.vault.core.VaultTemplate;
 import org.springframework.vault.support.VaultResponse;
 
+import java.util.HashSet;
 import java.util.List;
 import java.util.Optional;
 import java.util.Set;
@@ -42,16 +43,25 @@ public class ItemService {
     }
 
     @Transactional(readOnly = true)
-    public List<Item> getAllItems() {
-        return itemRepository.findAll();
+    public List<Item> getAllItems(String userId, String token) {
+        validateToken(userId, token);
+        User user = userRepository.findById(userId).orElseThrow(() -> new RuntimeException("User not found"));
+        Set<String> allowedSectors = getAllowedSectors(user);
+
+        return itemRepository.findAll().stream()
+                .filter(item -> allowedSectors.contains("ALL") || allowedSectors.contains(item.getSectorId()))
+                .toList();
     }
+
 
     @Transactional(readOnly = true)
     public Optional<Item> getItemById(Long id, String userId, String token) {
-        Item item = itemRepository.findById(id).orElseThrow(() -> new RuntimeException("Item not found"));
         validateToken(userId, token);
+        Item item = itemRepository.findById(id).orElseThrow(() -> new RuntimeException("Item not found"));
+        validatePolicy(userId, "list", item.getSectorId());
         return Optional.of(item);
     }
+
 
     @Transactional
     public Item createItem(Item item, String userId, String token) {
@@ -67,8 +77,8 @@ public class ItemService {
 
     @Transactional
     public Item updateItem(Long id, Item itemDetails, String userId, String token) {
-        Item item = itemRepository.findById(id).orElseThrow(() -> new RuntimeException("Item not found"));
         validateToken(userId, token);
+        Item item = itemRepository.findById(id).orElseThrow(() -> new RuntimeException("Item not found"));
         validatePolicy(userId, "update", itemDetails.getSectorId());
         item.setDescription(itemDetails.getDescription());
         item.setSectorId(itemDetails.getSectorId());
@@ -77,9 +87,9 @@ public class ItemService {
 
     @Transactional
     public void deleteItem(Long id, String userId, String token) {
-        Item item = itemRepository.findById(id).orElseThrow(() -> new RuntimeException("Item not found"));
         validateToken(userId, token);
-        validatePolicy(userId, "delete", null);
+        Item item = itemRepository.findById(id).orElseThrow(() -> new RuntimeException("Item not found"));
+        validatePolicy(userId, "delete", item.getSectorId());
         itemRepository.deleteById(id);
     }
 
@@ -102,30 +112,20 @@ public class ItemService {
         }
     }
 
-    private String validateTokenAndGetUserId(String userId, String token) {
-        String vaultPath = "user-secrets/" + userId;
-        VaultResponse response = kvOperations.get(vaultPath);
-        if (response == null || response.getData() == null) {
-            throw new RuntimeException("Invalid token");
-        }
-        String storedToken = (String) response.getData().get("secret");
-        if (!token.equals(storedToken)) {
-            throw new RuntimeException("Invalid token");
-        }
-        return (String) response.getData().get("user");
-    }
-
     private void validatePolicy(String userId, String operation, String sectorId) {
         User user = userRepository.findById(userId).orElseThrow(() -> new RuntimeException("User not found"));
         Set<Policy> policies = user.getPolicies();
         boolean operationAllowed = false;
-        boolean sectorAllowed = (sectorId == null); // If sectorId is null, skip sector check
+        boolean sectorAllowed = false;
 
         for (Policy policy : policies) {
             try {
                 ObjectMapper mapper = new ObjectMapper();
                 JsonNode policyDefinition = mapper.readTree(policy.getDefinition());
                 JsonNode allowedOperations = policyDefinition.get("allowedOperations");
+                JsonNode allowedSectors = policyDefinition.get("allowedSectors");
+
+                // Check if operation is allowed
                 if (allowedOperations != null && allowedOperations.isArray()) {
                     for (JsonNode allowedOperation : allowedOperations) {
                         if (allowedOperation.asText().equals(operation)) {
@@ -135,21 +135,20 @@ public class ItemService {
                     }
                 }
 
-                if (sectorId != null) {
-                    JsonNode allowedSectors = policyDefinition.get("allowedSectors");
-                    if (allowedSectors == null) {
-                        // If no allowedSectors are defined, allow all sectors
-                        sectorAllowed = true;
-                    } else if (allowedSectors.isArray()) {
-                        for (JsonNode allowedSector : allowedSectors) {
-                            if (allowedSector.asText().equals(sectorId)) {
-                                sectorAllowed = true;
-                                break;
-                            }
+                // Check if sector is allowed
+                if (allowedSectors == null || allowedSectors.isArray() && allowedSectors.size() == 0) {
+                    // If allowedSectors is not specified or empty, allow access to all sectors
+                    sectorAllowed = true;
+                } else if (allowedSectors != null && allowedSectors.isArray()) {
+                    for (JsonNode allowedSector : allowedSectors) {
+                        if (allowedSector.asText().equals(sectorId)) {
+                            sectorAllowed = true;
+                            break;
                         }
                     }
                 }
 
+                // If both operation and sector are allowed, return
                 if (operationAllowed && sectorAllowed) {
                     return;
                 }
@@ -167,8 +166,37 @@ public class ItemService {
         }
     }
 
+    private Set<String> getAllowedSectors(User user) {
+        Set<String> allowedSectors = new HashSet<>();
+        boolean hasAllowedSectors = false;
+
+        for (Policy policy : user.getPolicies()) {
+            try {
+                ObjectMapper mapper = new ObjectMapper();
+                JsonNode policyDefinition = mapper.readTree(policy.getDefinition());
+                JsonNode sectors = policyDefinition.get("allowedSectors");
+                if (sectors != null && sectors.isArray()) {
+                    hasAllowedSectors = true;
+                    for (JsonNode sector : sectors) {
+                        allowedSectors.add(sector.asText());
+                    }
+                }
+            } catch (Exception e) {
+                throw new RuntimeException("Error parsing policy definition", e);
+            }
+        }
+
+        // If no allowedSectors are defined in any policy, allow access to all sectors
+        if (!hasAllowedSectors) {
+            allowedSectors.add("ALL");
+        }
+
+        return allowedSectors;
+    }
+
     private Long generateItemId() {
         // Implement your logic to generate a unique ID
         return System.currentTimeMillis(); // Just an example
     }
 }
+
